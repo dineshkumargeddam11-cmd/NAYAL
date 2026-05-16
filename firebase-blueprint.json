@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "Appointment": {
+      "title": "Appointment",
+      "description": "An appointment request",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "services": { "type": "array", "items": { "type": "string" } },
+        "status": { "type": "string", "enum": ["pending", "confirmed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phone", "createdAt"]
+    },
+    "QuotationRequest": {
+      "title": "Quotation Request",
+      "description": "Request for a quotation PDF",
+      "type": "object",
+      "properties": {
+        "phone": { "type": "string" },
+        "propertyType": { "type": "string" },
+        "qualityTier": { "type": "string" },
+        "items": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["phone", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "User requested appointments"
+    },
+    "/quotationRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/QuotationRequest" },
+      "description": "User requested quotations"
+    }
+  }
+}

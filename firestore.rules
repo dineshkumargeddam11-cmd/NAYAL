@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 0.1 Context-Aware Helper Constraints
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+
+    function isAdmin() {
+      // Allow any user for dev purposes, but ideally this would check an admins collection
+      return false;
+    }
+
+    function isValidAppointment(data) {
+      return data.keys().hasAll(['phone', 'createdAt']) &&
+        data.phone is string && data.phone.size() >= 10 && data.phone.size() <= 15 &&
+        data.createdAt == request.time &&
+        (data.name == null || (data.name is string && data.name.size() <= 100)) &&
+        (data.date == null || (data.date is string && data.date.size() <= 20)) &&
+        (data.time == null || (data.time is string && data.time.size() <= 20)) &&
+        (data.status == null || (data.status is string && (data.status == 'pending' || data.status == 'confirmed' || data.status == 'cancelled'))) &&
+        (data.services == null || (data.services is list && data.services.size() <= 20)); // Basic list validation
+    }
+
+    function isValidQuotationRequest(data) {
+      return data.keys().hasAll(['phone', 'createdAt']) &&
+        data.phone is string && data.phone.size() >= 10 && data.phone.size() <= 15 &&
+        data.createdAt == request.time &&
+        (data.propertyType == null || (data.propertyType is string && data.propertyType.size() <= 50)) &&
+        (data.qualityTier == null || (data.qualityTier is string && data.qualityTier.size() <= 50)) &&
+        (data.items == null || (data.items is string && data.items.size() <= 2000));
+    }
+
+    match /appointments/{appointmentId} {
+      allow create: if isValidId(appointmentId) && isValidAppointment(incoming());
+      allow read: if isAdmin(); // only admins can view appointments
+    }
+
+    match /quotationRequests/{requestId} {
+      allow create: if isValidId(requestId) && isValidQuotationRequest(incoming());
+      allow read: if isAdmin(); // only admins can view quotation requests
+    }
+  }
+}
