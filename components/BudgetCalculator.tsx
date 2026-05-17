@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { CalculatorIcon } from "./icons/UIIcons";
-import { Check } from "lucide-react";
+import { Check, Download, Send, Phone, Lock, FileText, IndianRupee } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
+import { auth } from "../firebase";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+
 
 const PROPERTY_TYPES = [
   "1 BHK",
@@ -283,10 +288,17 @@ const BudgetCalculator: React.FC = () => {
   });
   const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
   const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
   const [error, setError] = useState("");
 
   // Re-calculate automatically when selections change
   useEffect(() => {
+    // If auth is already granted for a phone, and we're here, we can keep it authenticated unless phone changes.
+    // However, if they change the quote, they stay authenticated to view it.
     const hasSelection = Object.values(itemQuantities).some((q) => q > 0);
     if (!propertyType || !hasSelection) {
       setEstimatedCost(null);
@@ -305,38 +317,151 @@ const BudgetCalculator: React.FC = () => {
     setEstimatedCost(total);
   }, [propertyType, qualityTier, itemQuantities]);
 
-  const handleDownloadPDF = async () => {
-    if (phone.length < 10) return;
+  const setupRecaptcha = () => {
+    if (!(window as any).recaptchaVerifier) {
+      (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        'size': 'invisible',
+        'callback': (response: any) => {
+          // reCAPTCHA solved
+        }
+      });
+    }
+  };
 
-    const selectedDetails = (Object.keys(itemQuantities) as ItemType[])
-      .filter((item) => itemQuantities[item] > 0)
-      .map((item) => `${item} (x${itemQuantities[item]})`)
-      .join(", ");
-
+  const handleSendOtp = async () => {
+    if (phone.length < 10) {
+      setError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    setError("");
+    setLoading(true);
     try {
+      setupRecaptcha();
+      const appVerifier = (window as any).recaptchaVerifier;
+      const phoneNumberWithCode = `+91${phone}`; // Default to India country code
+      const result = await signInWithPhoneNumber(auth, phoneNumberWithCode, appVerifier);
+      setConfirmationResult(result);
+      setOtpSent(true);
+    } catch (err: any) {
+      console.error("Error sending OTP:", err);
+      setError("Failed to send OTP. Please check your phone number and try again.");
+      if ((window as any).recaptchaVerifier) {
+        (window as any).recaptchaVerifier.clear();
+        (window as any).recaptchaVerifier = null;
+      }
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length < 6 || !confirmationResult) {
+      setError("Please enter a valid 6-digit OTP.");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      await confirmationResult.confirm(otp);
+      setIsAuthenticated(true);
+      // Save leads to firestore when authenticated
+      const selectedDetails = (Object.keys(itemQuantities) as ItemType[])
+        .filter((item) => itemQuantities[item] > 0)
+        .map((item) => `${item} (x${itemQuantities[item]})`)
+        .join(", ");
+        
       const { collection, addDoc, serverTimestamp } = await import("firebase/firestore");
       const { db, handleFirestoreError, OperationType } = await import("../firebase");
       
-      await addDoc(collection(db, "quotationRequests"), {
-        phone,
-        propertyType,
-        qualityTier,
-        items: selectedDetails,
-        createdAt: serverTimestamp()
-      });
-    } catch (error) {
-      const { handleFirestoreError, OperationType } = await import("../firebase");
-      handleFirestoreError(error, OperationType.CREATE, "quotationRequests");
-    }
+      try {
+          await addDoc(collection(db, "quotationRequests"), {
+            phone,
+            propertyType,
+            qualityTier,
+            items: selectedDetails,
+            estimatedCost,
+            createdAt: serverTimestamp()
+          });
+      } catch (firestoreErr) {
+          handleFirestoreError(firestoreErr, OperationType.CREATE, "quotationRequests");
+      }
 
-    const message = `Hello NAYA LUXE! I just checked a quotation on your website and would like the PDF.
-Property: ${propertyType}
-Quality: ${qualityTier}
-Items: ${selectedDetails}
-My Phone: ${phone}
-Please send me the detailed PDF quotation!`;
-    const whatsappUrl = `https://wa.me/918096450170?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, "_blank");
+    } catch (err: any) {
+      console.error("Error verifying OTP:", err);
+      setError("Incorrect OTP. Please try again.");
+    }
+    setLoading(false);
+  };
+
+  const handleDownloadPDF = () => {
+    if (!estimatedCost) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // App Header
+    doc.setFontSize(22);
+    doc.setTextColor(34, 34, 34);
+    doc.setFont("helvetica", "bold");
+    doc.text("NAYA LUXE", pageWidth / 2, 20, { align: "center" });
+    
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100, 100, 100);
+    doc.text("Interiors & Decors", pageWidth / 2, 27, { align: "center" });
+    doc.text("Estimated Quotation", pageWidth / 2, 34, { align: "center" });
+
+    // Details snippet
+    doc.setFontSize(11);
+    doc.setTextColor(50, 50, 50);
+    doc.text(`Phone: +91 ${phone}`, 14, 50);
+    doc.text(`Property: ${propertyType}`, 14, 56);
+    doc.text(`Quality Tier: ${qualityTier}`, 14, 62);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 68);
+
+    // Table Data
+    const tableColumn = ["Item Description", "Quantity", "Unit Cost", "Total"];
+    const tableRows: any[] = [];
+    
+    let totalComputed = 0;
+    (Object.keys(itemQuantities) as ItemType[]).forEach((item) => {
+      if (itemQuantities[item] > 0) {
+        const qty = itemQuantities[item];
+        const unitCost = QUOTATION_DATA[propertyType as PropertyType][qualityTier as QualityTier][item];
+        const itemTotal = unitCost * qty;
+        totalComputed += itemTotal;
+        tableRows.push([
+          item,
+          qty,
+          `Rs. ${unitCost.toLocaleString()}`,
+          `Rs. ${itemTotal.toLocaleString()}`
+        ]);
+      }
+    });
+
+    (doc as any).autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 75,
+      theme: 'grid',
+      headStyles: { fillColor: [34, 34, 34], textColor: [255, 255, 255] },
+      styles: { fontSize: 10, cellPadding: 4 },
+      margin: { top: 75 }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 75;
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(34, 34, 34);
+    doc.text(`Estimated Total: Rs. ${totalComputed.toLocaleString()}`, 14, finalY + 15);
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(150, 150, 150);
+    doc.text("*This is an estimated quotation generated automatically.", pageWidth / 2, finalY + 30, { align: "center" });
+    doc.text("Actual prices may vary after the final design consultation.", pageWidth / 2, finalY + 35, { align: "center" });
+
+    doc.save(`NayaLuxe_Quotation_${phone}.pdf`);
   };
 
   return (
@@ -353,6 +478,7 @@ Please send me the detailed PDF quotation!`;
 
         <div className="bg-white p-5 md:p-8 rounded-2xl shadow-xl shadow-sky-900/5 relative overflow-hidden ring-1 ring-gray-100">
           <div className="absolute top-0 right-0 w-64 h-64 bg-sky-100/50 rounded-full blur-3xl -z-10 translate-x-1/2 -translate-y-1/2"></div>
+          <div id="recaptcha-container"></div>
           <form className="space-y-8">
             <div>
               <label className="block text-sm uppercase tracking-wider font-bold text-gray-900 mb-4">
@@ -488,59 +614,152 @@ Please send me the detailed PDF quotation!`;
             </div>
           </form>
 
-          <AnimatePresence>
+          <AnimatePresence mode="wait">
             {estimatedCost !== null &&
               propertyType &&
               Object.values(itemQuantities).some((q) => q > 0) && (
                 <motion.div
+                  key="quotation-panel"
                   initial={{ opacity: 0, height: 0, marginTop: 0 }}
                   animate={{ opacity: 1, height: "auto", marginTop: 32 }}
                   exit={{ opacity: 0, height: 0, marginTop: 0 }}
                   className="bg-sky-50/80 border border-sky-100 rounded-2xl p-6 md:p-8 text-center"
                 >
                   <h4 className="text-gray-800 text-xl md:text-2xl font-bold mb-6 tracking-wide font-display">
-                    Get Your Detailed Quotation!
+                    Your Tailored Estimation
                   </h4>
-                  <div className="max-w-md mx-auto mb-6 text-left">
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      To download detailed PDF, please enter your phone number:
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="Phone Number (e.g. 9876543210)"
-                      value={phone}
-                      onChange={(e) =>
-                        setPhone(e.target.value.replace(/\D/g, ""))
-                      }
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800 font-medium text-center tracking-widest text-lg shadow-inner"
-                      maxLength={15}
-                    />
-                  </div>
-                  <div className="flex flex-col sm:flex-row justify-center gap-4">
-                    <button
-                      onClick={handleDownloadPDF}
-                      disabled={phone.length < 10}
-                      className={`font-bold py-3 px-8 rounded-full transition-all duration-200 flex items-center justify-center gap-2 ${
-                        phone.length >= 10
-                          ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 active:scale-95 cursor-pointer"
-                          : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      }`}
+
+                  {!isAuthenticated ? (
+                    <div className="max-w-md mx-auto mb-6 text-left">
+                      <p className="text-sm text-gray-600 mb-6 text-center">
+                        Please verify your mobile number to reveal the quotation amount and download the detailed PDF.
+                      </p>
+                      
+                      {error && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl text-center">
+                          {error}
+                        </div>
+                      )}
+
+                      {!otpSent ? (
+                        <div className="flex flex-col gap-4">
+                          <label className="block text-sm font-semibold text-gray-700">
+                            Enter Phone Number
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                              <Phone className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <input
+                              type="tel"
+                              placeholder="e.g. 9876543210"
+                              value={phone}
+                              onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                              className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-gray-800 font-medium text-lg shadow-inner"
+                              maxLength={15}
+                              disabled={loading}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleSendOtp}
+                            disabled={phone.length < 10 || loading}
+                            className={`w-full font-bold py-3 px-8 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
+                              phone.length >= 10 && !loading
+                                ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 active:scale-95 cursor-pointer"
+                                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            }`}
+                          >
+                            {loading ? "Sending OTP..." : "Send OTP"}
+                            {!loading && <Send className="w-4 h-4 ml-1" />}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-4">
+                          <label className="block text-sm font-semibold text-gray-700">
+                            Enter OTP sent to +91 {phone}
+                          </label>
+                          <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                              <Lock className="h-5 w-5 text-gray-400" />
+                            </div>
+                            <input
+                              type="text"
+                              placeholder="6-digit OTP"
+                              value={otp}
+                              onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                              className="w-full pl-12 pr-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all text-gray-800 font-medium tracking-[0.2em] text-center text-xl shadow-inner"
+                              maxLength={6}
+                              disabled={loading}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleVerifyOtp}
+                            disabled={otp.length < 6 || loading}
+                            className={`w-full font-bold py-3 px-8 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 ${
+                              otp.length === 6 && !loading
+                                ? "bg-green-600 text-white shadow-lg shadow-green-600/20 hover:bg-green-700 active:scale-95 cursor-pointer"
+                                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                            }`}
+                          >
+                            {loading ? "Verifying..." : "Verify & Reveal"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOtpSent(false);
+                              setOtp("");
+                              setError("");
+                            }}
+                            className="text-center text-sm text-gray-500 hover:text-gray-800 transition-colors mt-2"
+                            disabled={loading}
+                          >
+                            Change phone number
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="max-w-xl mx-auto flex flex-col items-center gap-6"
                     >
-                      Download PDF{" "}
-                      <span className="opacity-80 text-sm font-normal">
-                        via WhatsApp
-                      </span>
-                    </button>
-                    <a
-                      href="#contact"
-                      className="bg-white text-blue-900 font-bold py-3 px-8 rounded-full hover:bg-gray-50 transition-colors border border-gray-200 shadow-sm active:scale-95 duration-200 flex justify-center items-center"
-                    >
-                      Contact Us
-                    </a>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-6">
-                    *Our team will contact you shortly with the detailed PDF quote based on your selections.
-                  </p>
+                      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-green-100 w-full relative overflow-hidden">
+                        <div className="absolute -top-10 -right-10 text-green-50 opacity-50">
+                          <IndianRupee className="w-40 h-40" />
+                        </div>
+                        <h5 className="text-gray-500 font-medium text-sm md:text-base uppercase tracking-wider mb-2">Estimated Total Cost</h5>
+                        <div className="flex items-end justify-center gap-2">
+                          <span className="text-3xl md:text-4xl text-gray-400 font-light hidden sm:block">Rs.</span>
+                          <span className="text-4xl md:text-6xl font-bold text-gray-900 tabular-nums tracking-tight">
+                            ₹{estimatedCost.toLocaleString()}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-400 mt-4 max-w-sm mx-auto">
+                          *This is an approximate estimation. Actual costs may vary based on specific material choices and final measurements.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row justify-center gap-4 w-full px-4">
+                        <button
+                          onClick={handleDownloadPDF}
+                          className="flex-1 font-bold py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 bg-blue-600 text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 active:scale-95"
+                        >
+                          <FileText className="w-5 h-5" />
+                          Download PDF Quotation
+                        </button>
+                        <a
+                          href="#contact"
+                          className="flex-1 bg-white text-gray-900 font-bold py-4 px-6 rounded-xl hover:bg-gray-50 transition-colors border-2 border-gray-200 shadow-sm active:scale-95 duration-200 flex justify-center items-center gap-2"
+                        >
+                          <Phone className="w-5 h-5" />
+                          Contact Expert
+                        </a>
+                      </div>
+                    </motion.div>
+                  )}
                 </motion.div>
               )}
           </AnimatePresence>
