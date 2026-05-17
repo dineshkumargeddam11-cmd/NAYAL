@@ -344,7 +344,15 @@ const BudgetCalculator: React.FC = () => {
       setOtpSent(true);
     } catch (err: any) {
       console.error("Error sending OTP:", err);
-      setError("Failed to send OTP. Please check your phone number and try again.");
+      // Surface the actual error message so the user knows what configuration is missing
+      let errorMessage = err.message || "Failed to send OTP.";
+      if (errorMessage.includes("auth/operation-not-allowed")) {
+        errorMessage = "Phone authentication is not enabled in the Firebase Console. Please enable it in Authentication > Sign-in method.";
+      } else if (errorMessage.includes("auth/unauthorized-domain")) {
+        errorMessage = "This domain is not authorized for Phone Auth. Please add it in Firebase Console > Authentication > Settings > Authorized domains.";
+      }
+      setError(errorMessage);
+      
       if ((window as any).recaptchaVerifier) {
         (window as any).recaptchaVerifier.clear();
         (window as any).recaptchaVerifier = null;
