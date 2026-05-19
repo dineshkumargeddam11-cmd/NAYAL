@@ -143,19 +143,41 @@ Services Interested: ${formData.services.join(", ") || "Not specified"}`;
     return (
       <section id="contact" className="py-20 bg-transparent">
         <div className="container mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold font-display text-sky-800">
-            Appointment Requested!
-          </h2>
-          <p className="text-lg text-gray-600 mt-4">
-            We've redirected you to WhatsApp to confirm your appointment. Our
-            team will assist you shortly.
-          </p>
-          <button
-            onClick={() => setIsAppointmentBooked(false)}
-            className="mt-8 bg-sky-600 text-white hover:bg-sky-700 font-medium px-8 py-3 rounded-full transition-colors"
-          >
-            Return to Form
-          </button>
+          <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl max-w-2xl mx-auto border border-gray-100">
+            <h2 className="text-3xl md:text-4xl font-bold text-sky-800 mb-4">
+              Thank You!
+            </h2>
+            <p className="text-lg text-gray-600 mb-6">
+              Your appointment request has been submitted. We look forward to meeting you!
+            </p>
+            <div className="bg-sky-50 rounded-xl p-6 mb-8 inline-block text-left w-full max-w-md">
+              <h3 className="font-semibold text-sky-900 mb-3 text-lg border-b border-sky-200 pb-2">Appointment Details:</h3>
+              <div className="space-y-2 text-sky-800">
+                <p><span className="font-medium">Date:</span> {formData.date || "To be confirmed"}</p>
+                <p><span className="font-medium">Time:</span> {formData.time || "To be confirmed"}</p>
+                <p><span className="font-medium">Name:</span> {formData.name || "N/A"}</p>
+              </div>
+            </div>
+            
+            <p className="text-md text-gray-500 mb-8 max-w-lg mx-auto">
+              We've also opened WhatsApp to help you connect with our team directly. While you wait, we invite you to explore our comprehensive interior segments.
+            </p>
+            
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+              <a
+                href="#services"
+                className="bg-brand-gold text-white hover:bg-yellow-600 font-bold px-8 py-3 rounded-full shadow-lg transition-all transform hover:-translate-y-1 w-full sm:w-auto"
+              >
+                Comprehensive Interior Segments
+              </a>
+              <button
+                onClick={() => setIsAppointmentBooked(false)}
+                className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium px-8 py-3 rounded-full transition-colors w-full sm:w-auto"
+              >
+                Book Another
+              </button>
+            </div>
+          </div>
         </div>
       </section>
     );

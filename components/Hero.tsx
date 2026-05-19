@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 
 import { PORTFOLIO_IMAGES } from "./Portfolio";
 
@@ -65,7 +65,7 @@ const Hero: React.FC = () => {
       </div>
 
       {/* Slides Indicators */}
-      <div className="absolute bottom-12 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-4 z-20">
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center space-y-6 z-20">
         <div className="flex space-x-3">
           {heroImages.map((_, index) => (
             <button
@@ -80,6 +80,14 @@ const Hero: React.FC = () => {
             />
           ))}
         </div>
+        <motion.div
+           initial={{ opacity: 0 }}
+           animate={{ opacity: 1, y: [0, 10, 0] }}
+           transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+           className="text-white/50"
+        >
+          <ChevronDown className="w-8 h-8 pointer-events-none" strokeWidth={2} />
+        </motion.div>
       </div>
 
       {/* Content */}
@@ -112,23 +120,23 @@ const Hero: React.FC = () => {
         >
           <a
             href="#contact"
-            className="group relative bg-sky-100 text-sky-900 font-bold py-4 px-10 rounded-full hover:bg-blue-600 hover:text-white active:bg-blue-700 transition-all duration-300 text-lg md:text-xl inline-flex items-center justify-center shadow-[0_0_15px_rgba(186,230,253,0.6)] hover:shadow-[0_0_25px_rgba(37,99,235,0.8)] tracking-wider uppercase overflow-hidden text-center"
+            className="group relative bg-[#2563eb] text-white font-bold py-4 px-10 rounded-full hover:bg-blue-700 active:bg-blue-800 transition-all duration-300 text-lg md:text-xl inline-flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.6)] hover:shadow-[0_0_25px_rgba(37,99,235,0.8)] tracking-wider uppercase overflow-hidden text-center"
           >
             <span className="relative z-10 flex items-center justify-center">
               Get a Free Consultation
-              <span className="ml-2 inline-block origin-bottom-right transition-transform duration-300 group-hover:scale-125 group-hover:-rotate-12">
-                👋
+              <span className="ml-2 inline-block transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110">
+                💡
               </span>
             </span>
           </a>
           <a
             href="#budget-calculator"
-            className="group relative bg-sky-50 text-sky-800 border-2 border-sky-300 font-bold py-4 px-10 rounded-full hover:bg-blue-500 hover:border-blue-500 hover:text-white active:bg-blue-600 transition-all duration-300 text-lg md:text-xl inline-flex items-center justify-center shadow-[0_4px_15px_rgba(186,230,253,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.8)] tracking-wider uppercase overflow-hidden text-center"
+            className="group relative bg-[#2563eb] text-white font-bold py-4 px-10 rounded-full hover:bg-blue-700 active:bg-blue-800 transition-all duration-300 text-lg md:text-xl inline-flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.6)] hover:shadow-[0_0_25px_rgba(37,99,235,0.8)] tracking-wider uppercase overflow-hidden text-center"
           >
             <span className="relative z-10 flex items-center justify-center">
               Get Quotation
               <span className="ml-2 inline-block transition-transform duration-300 group-hover:-translate-y-1 group-hover:scale-110">
-                ✨
+                🚀
               </span>
             </span>
           </a>

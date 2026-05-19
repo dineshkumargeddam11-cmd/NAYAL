@@ -15,9 +15,43 @@
     <style>
       /* Custom styles */
       body {
-        background-color: #f6f4f0;
-        background-image: url("https://www.transparenttextures.com/patterns/stucco.png");
+        background-color: #ebeed9; /* pale olive yellowish */
+        background-image: linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(235, 238, 217, 0) 100%);
         background-attachment: fixed;
+        color: #2b331f; /* dark font */
+      }
+      
+      @keyframes float-soft {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); box-shadow: 0 25px 40px rgba(110, 120, 80, 0.15); }
+        100% { transform: translateY(0px); }
+      }
+
+      @keyframes float-gentle {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+        100% { transform: translateY(0px); }
+      }
+
+      /* Make all cards/white containers float slightly and adapt background */
+      div.bg-white, div.bg-gray-50, div.bg-brand-light-grey, .rounded-2xl {
+        animation: float-soft 6s ease-in-out infinite;
+      }
+      
+      /* Make icons float gently */
+      svg, img, button {
+        animation: float-gentle 4s ease-in-out infinite;
+      }
+
+      /* Keep form elements distinct */
+      input, select, textarea {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+      }
+      
+      /* Keep specific icon colors if they had them, don't let color override ruin SVGs completely if they can be helped, though some might use currentColor */
+      svg {
+        stroke: currentColor;
       }
     </style>
     <script>
